@@ -43,3 +43,9 @@ htmlcov/
 
 # Misc
 .python-version
+
+# Node
+node_modules/
+
+# Local data
+*.db
