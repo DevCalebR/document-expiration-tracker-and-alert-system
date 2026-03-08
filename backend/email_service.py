@@ -1,37 +1,81 @@
+from dataclasses import dataclass
+import logging
 import smtplib
 from email.message import EmailMessage
-import os
+
+from config import settings
+
+logger = logging.getLogger(__name__)
 
 
-def send_email(to_email: str, subject: str, body: str):
-    """
-    Sends an email using SMTP.
-    Fails safely if email is not configured.
-    """
+class EmailError(Exception):
+    pass
 
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = os.getenv("SMTP_PORT")
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    from_email = os.getenv("FROM_EMAIL")
 
-    # If email is not configured, do not crash the app
-    if not all([smtp_host, smtp_port, smtp_user, smtp_password, from_email]):
-        print("Email not configured. Skipping email send.")
-        return
+class EmailNotConfiguredError(EmailError):
+    pass
+
+
+class EmailDeliveryError(EmailError):
+    pass
+
+
+@dataclass
+class EmailSendResult:
+    sent: bool
+    detail: str
+
+
+def email_is_configured() -> bool:
+    return all(
+        [
+            settings.SMTP_HOST,
+            settings.SMTP_PORT,
+            settings.SMTP_USER,
+            settings.SMTP_PASSWORD,
+            settings.FROM_EMAIL,
+        ]
+    )
+
+
+def ensure_email_configured() -> None:
+    if not email_is_configured():
+        raise EmailNotConfiguredError(
+            "SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, and FROM_EMAIL."
+        )
+
+
+def send_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    *,
+    raise_on_failure: bool = False,
+) -> EmailSendResult:
+    if not email_is_configured():
+        detail = (
+            "SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, and FROM_EMAIL."
+        )
+        logger.warning("email_not_configured", extra={"to_email": to_email})
+        if raise_on_failure:
+            raise EmailNotConfiguredError(detail)
+        return EmailSendResult(sent=False, detail=detail)
 
     msg = EmailMessage()
-    msg["From"] = from_email
+    msg["From"] = settings.FROM_EMAIL
     msg["To"] = to_email
     msg["Subject"] = subject
     msg.set_content(body)
 
     try:
-        with smtplib.SMTP(smtp_host, int(smtp_port)) as server:
+        with smtplib.SMTP(settings.SMTP_HOST, int(settings.SMTP_PORT)) as server:
             server.starttls()
-            server.login(smtp_user, smtp_password)
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.send_message(msg)
-            print(f"Email sent to {to_email}")
-    except Exception as e:
-        print(f"Email send failed: {e}")
-
+            logger.info("email_sent", extra={"to_email": to_email})
+            return EmailSendResult(sent=True, detail="Email sent successfully.")
+    except Exception as exc:
+        logger.exception("email_send_failed", extra={"to_email": to_email})
+        if raise_on_failure:
+            raise EmailDeliveryError("SMTP delivery failed.") from exc
+        return EmailSendResult(sent=False, detail="SMTP delivery failed.")

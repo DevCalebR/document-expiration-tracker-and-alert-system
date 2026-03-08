@@ -11,7 +11,10 @@ vi.mock('../utils/api', () => ({
 
 const renderWithRoute = (route) => {
   render(
-    <MemoryRouter initialEntries={[route]}>
+    <MemoryRouter
+      initialEntries={[route]}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <Routes>
         <Route path="/verify-email" element={<VerifyEmail />} />
       </Routes>
