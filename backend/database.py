@@ -1,16 +1,23 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+import logging
 from datetime import datetime
+from pathlib import Path
+import os
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text
+from sqlalchemy.orm import declarative_base, sessionmaker
 from config import settings
 
-engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
+logger = logging.getLogger(__name__)
+
+
+connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(settings.DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
@@ -18,13 +25,14 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(String, default="user")
     is_active = Column(Boolean, default=True)
-    is_verified = Column(Boolean, default=False)  # Email verification status
-    verification_token = Column(String, nullable=True)  # Token for email verification
+    is_verified = Column(Boolean, default=False)
+    verification_token = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, index=True)
     action = Column(String)
@@ -32,9 +40,10 @@ class AuditLog(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     ip_address = Column(String, nullable=True)
 
+
 class CloudToken(Base):
     __tablename__ = "cloud_tokens"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
     provider = Column(String)
@@ -43,9 +52,10 @@ class CloudToken(Base):
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
 class Document(Base):
     __tablename__ = "documents"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
     original_filename = Column(String)
@@ -55,9 +65,10 @@ class Document(Base):
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     last_processed_at = Column(DateTime, nullable=True)
 
+
 class DocumentDate(Base):
     __tablename__ = "document_dates"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, index=True)
     date_raw = Column(String)
@@ -68,41 +79,28 @@ class DocumentDate(Base):
     last_alerted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+def run_migrations():
+    from alembic import command
+    from alembic.config import Config
+
+    alembic_cfg = Config(str(Path(__file__).resolve().parent / "alembic.ini"))
+    alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+    command.upgrade(alembic_cfg, "head")
+
+
 def init_db():
+    run_migrations_flag = os.getenv("RUN_MIGRATIONS_ON_STARTUP", "True") == "True"
+    if run_migrations_flag:
+        try:
+            run_migrations()
+            return
+        except Exception:
+            logger.exception("database_migration_failed")
+            if settings.APP_ENV in {"staging", "production"}:
+                raise
     Base.metadata.create_all(bind=engine)
-    
-    db = SessionLocal()
-    from auth import get_password_hash
-    
-    if settings.APP_DEBUG:
-        # Default admin user (dev only)
-        admin_exists = db.query(User).filter(User.username == "admin").first()
-        if not admin_exists:
-            admin = User(
-                username="admin",
-                email="removed@example.invalid",
-                full_name="Admin User",
-                hashed_password=get_password_hash("REMOVED_UNSAFE_DEFAULT"),
-                role="admin",
-                is_verified=True,
-            )
-            db.add(admin)
-        
-        # Default regular user (dev only)
-        user_exists = db.query(User).filter(User.username == "user").first()
-        if not user_exists:
-            user = User(
-                username="user",
-                email="removed@example.invalid",
-                full_name="Regular User",
-                hashed_password=get_password_hash("REMOVED_UNSAFE_DEFAULT"),
-                role="user",
-                is_verified=True,
-            )
-            db.add(user)
-    
-    db.commit()
-    db.close()
+
 
 def get_db():
     db = SessionLocal()

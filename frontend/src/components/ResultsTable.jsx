@@ -21,7 +21,9 @@ export const ResultsTable = ({ fileResults, expanded, onToggleExpand }) => {
           <div>
             <h3 className="font-semibold text-gray-800">{fileResults.filename}</h3>
             <p className="text-sm text-gray-600">
-              {fileResults.pages_extracted} pages • {fileResults.dates_detected} dates detected
+              {fileResults.error
+                ? 'Processing failed for this document'
+                : `${fileResults.pages_extracted ?? 0} pages • ${fileResults.dates_detected ?? 0} dates detected`}
             </p>
           </div>
         </div>
@@ -30,7 +32,11 @@ export const ResultsTable = ({ fileResults, expanded, onToggleExpand }) => {
 
       {expanded && (
         <div className="p-4">
-          {results.length === 0 ? (
+          {fileResults.error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {fileResults.error}
+            </div>
+          ) : results.length === 0 ? (
             <p className="text-gray-500 text-center py-4">No dates detected in this document</p>
           ) : (
             <div className="overflow-x-auto">

@@ -47,6 +47,7 @@ def test_upload_process_extract_and_delete(client, monkeypatch, tmp_path):
     )
     assert upload.status_code == 200
     saved_name = upload.json()["saved_filename"]
+    assert "/" in saved_name
 
     _setup_backend_imports()
     import main
@@ -76,6 +77,42 @@ def test_upload_process_extract_and_delete(client, monkeypatch, tmp_path):
         headers={"Authorization": f"Bearer {token}"}
     )
     assert deleted.status_code == 200
+
+
+def test_async_process_job_flow(client, monkeypatch):
+    _create_user("george", "georgepass", email="george@example.com", verified=True)
+    token = _login(client, "george", "georgepass")
+
+    upload = client.post(
+        "/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("doc.png", b"fake", "image/png")}
+    )
+    saved_name = upload.json()["saved_filename"]
+
+    _setup_backend_imports()
+    import processing
+
+    def fake_extract_text(_):
+        return {"pages": 1, "content": [{"page": 1, "text": "Expires 12/31/2030"}]}, None
+
+    monkeypatch.setattr(processing, "extract_text_from_file", fake_extract_text)
+
+    queued = client.post(
+        "/process/async",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"filenames": [saved_name]}
+    )
+    assert queued.status_code == 200
+    job_id = queued.json()["job_id"]
+
+    status = client.get(
+        f"/jobs/{job_id}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert status.status_code == 200
+    assert status.json()["status"] == "finished"
+    assert status.json()["result"]["files_processed"] == 1
 
 
 def test_ai_analyze_endpoint(client):

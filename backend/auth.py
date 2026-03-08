@@ -23,6 +23,29 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
+
+def create_oauth_state(user_id: int, provider: str, expires_minutes: int = 15) -> str:
+    return create_access_token(
+        data={"sub": str(user_id), "provider": provider, "purpose": "cloud_oauth"},
+        expires_delta=timedelta(minutes=expires_minutes),
+    )
+
+
+def decode_oauth_state(token: str) -> dict:
+    payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+    if payload.get("purpose") != "cloud_oauth":
+        raise JWTError("Invalid OAuth state token")
+    return payload
+
+
+def serialize_user(user: User) -> dict:
+    return {
+        "username": user.username,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role,
+    }
+
 def authenticate_user(db: Session, username: str, password: str):
     user = db.query(User).filter(User.username == username).first()
     if not user:
@@ -69,4 +92,3 @@ def log_audit(db: Session, username: str, action: str, details: str, ip_address:
     )
     db.add(log)
     db.commit()
-

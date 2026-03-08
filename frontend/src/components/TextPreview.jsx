@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Copy, Check, Loader2 } from 'lucide-react';
 import { api } from '../utils/api';
 
-export const TextPreview = ({ filename, onClose }) => {
+export const TextPreview = ({ filename, title, onClose }) => {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -19,7 +19,7 @@ export const TextPreview = ({ filename, onClose }) => {
           setText(fullText);
         }
       } catch (error) {
-        setText('Error loading text preview');
+        setText(error.message || 'Error loading text preview');
       } finally {
         setLoading(false);
       }
@@ -38,7 +38,7 @@ export const TextPreview = ({ filename, onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col">
         <div className="p-4 border-b flex items-center justify-between">
-          <h3 className="font-semibold text-lg">Text Preview: {filename}</h3>
+          <h3 className="font-semibold text-lg">Text Preview: {title || filename}</h3>
           <div className="flex gap-2">
             <button
               onClick={handleCopy}
