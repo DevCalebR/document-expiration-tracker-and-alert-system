@@ -7,10 +7,22 @@ import pytest
 @pytest.fixture(scope="session", autouse=True)
 def _set_test_env(tmp_path_factory):
     tmp_dir = tmp_path_factory.mktemp("docexpire_test")
+    os.environ["APP_ENV"] = "test"
     os.environ["APP_DEBUG"] = "False"
-    os.environ["DATABASE_URL"] = f"sqlite:///{tmp_dir}/test.db"
-    os.environ["UPLOAD_DIR"] = str(tmp_dir / "uploads")
-    os.environ["JWT_SECRET_KEY"] = "test-secret"
+    os.environ["APP_SECRET_KEY"] = "test-secret-key-change-this-1234"
+    os.environ["FRONTEND_URL"] = "http://localhost:5173"
+    os.environ["CORS_ALLOW_ORIGINS"] = "http://localhost:5173"
+    os.environ["ALLOWED_HOSTS"] = "localhost,127.0.0.1,testserver"
+    os.environ["REDIS_URL"] = "fakeredis://"
+    os.environ["RQ_ASYNC"] = "False"
+    os.environ["JWT_SECRET_KEY"] = "test-jwt-secret-key-change-this-1234"
+    os.environ["DATABASE_URL"] = os.getenv(
+        "TEST_DATABASE_URL",
+        f"sqlite:///{tmp_dir / 'docexpire_test.db'}",
+    )
+    os.environ["STORAGE_PROVIDER"] = "memory"
+    os.environ["STORAGE_BUCKET"] = "test-bucket"
+    os.environ["TEMP_DIR_OVERRIDE"] = str(tmp_dir / "tmp")
     # Ensure tables are created once for the test DB
     backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if backend_path not in sys.path:
@@ -187,6 +199,11 @@ def _clean_db():
         sys.path.insert(0, backend_path)
 
     import database
+    import job_queue
+    import storage
+
+    job_queue._REDIS_CONNECTION = None
+    storage._STORAGE_CLIENT = None
     database.Base.metadata.create_all(bind=database.engine)
     db = database.SessionLocal()
     try:

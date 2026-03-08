@@ -39,6 +39,7 @@ def test_register_verify_login(client):
         "password": "password123"
     })
     assert response.status_code == 200
+    assert "verification_url" in response.json()
 
     _setup_backend_imports()
     import database
@@ -79,3 +80,12 @@ def test_admin_only_audit_logs(client):
 
     user_logs = client.get("/audit/logs", headers={"Authorization": f"Bearer {user_token}"})
     assert user_logs.status_code == 403
+
+
+def test_admin_test_email_requires_smtp(client):
+    _create_user("admin", "adminpass", role="admin", email="admin@example.com", verified=True)
+    admin_login = client.post("/auth/token", data={"username": "admin", "password": "adminpass"})
+    admin_token = admin_login.json()["access_token"]
+
+    response = client.post("/admin/test-email", headers={"Authorization": f"Bearer {admin_token}"})
+    assert response.status_code == 503

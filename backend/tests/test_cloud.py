@@ -60,3 +60,39 @@ def test_cloud_list_and_import(client, monkeypatch, tmp_path):
     )
     assert import_resp.status_code == 200
     assert len(import_resp.json()["imported_files"]) == 1
+
+
+def test_cloud_oauth_routes(client, monkeypatch):
+    user = _create_user("gina", "ginapass", email="gina@example.com", verified=True)
+    token = _login(client, "gina", "ginapass")
+
+    _setup_backend_imports()
+    import main
+
+    captured = {}
+
+    def fake_auth_url(user_id, state):
+        return f"http://example.com/oauth?state={state}&user_id={user_id}"
+
+    def fake_handle_callback(code, user_id):
+        captured["code"] = code
+        captured["user_id"] = user_id
+
+    monkeypatch.setattr(main.GoogleDriveConnector, "get_auth_url", fake_auth_url)
+    monkeypatch.setattr(main.GoogleDriveConnector, "handle_callback", fake_handle_callback)
+
+    providers = client.get("/cloud/providers", headers={"Authorization": f"Bearer {token}"})
+    assert providers.status_code == 200
+    assert any(provider["id"] == "google_drive" for provider in providers.json()["providers"])
+
+    auth_url_resp = client.get(
+        "/cloud/google_drive/auth-url",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert auth_url_resp.status_code == 200
+    auth_url = auth_url_resp.json()["auth_url"]
+    state = auth_url.split("state=")[1].split("&")[0]
+
+    callback = client.get(f"/auth/google/callback?state={state}&code=test-code")
+    assert callback.status_code == 200
+    assert captured == {"code": "test-code", "user_id": user.id}

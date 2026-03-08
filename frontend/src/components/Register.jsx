@@ -11,6 +11,7 @@ export const Register = ({ onBackToLogin }) => {
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [registrationResult, setRegistrationResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
@@ -22,10 +23,12 @@ export const Register = ({ onBackToLogin }) => {
     setLoading(true);
     setError('');
     setSuccess('');
+    setRegistrationResult(null);
 
     try {
-      await api.register(form);
-      setSuccess('Account created! Check your email to verify your account.');
+      const data = await api.register(form);
+      setRegistrationResult(data);
+      setSuccess(data.message || 'Account created.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -80,6 +83,20 @@ export const Register = ({ onBackToLogin }) => {
 
           {error && <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm">{error}</div>}
           {success && <div className="bg-green-50 text-green-600 px-4 py-2 rounded-lg text-sm">{success}</div>}
+          {registrationResult?.verification_url && (
+            <div className="bg-blue-50 text-blue-700 px-4 py-3 rounded-lg text-sm">
+              <p className="font-medium mb-1">Local verification link</p>
+              <p className="mb-2">
+                SMTP is not configured in this environment, so verify the account manually with this link.
+              </p>
+              <a
+                href={registrationResult.verification_url}
+                className="underline break-all"
+              >
+                {registrationResult.verification_url}
+              </a>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -100,4 +117,3 @@ export const Register = ({ onBackToLogin }) => {
     </div>
   );
 };
-
