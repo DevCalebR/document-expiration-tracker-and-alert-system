@@ -1,183 +1,181 @@
+<div align="center">
+
 # DocExpire
 
-DocExpire tracks uploaded and cloud-imported documents, extracts expiration dates with OCR, shows expiring-soon risk in the UI, and can send scheduled alert emails.
+### Find expiring documents before they become operational problems.
 
-## What ships in this repo
-- `backend/`: FastAPI API, OCR/date extraction, queue jobs, alert scheduler, OAuth callbacks, storage adapters
-- `frontend/`: React/Vite UI for auth, uploads, async processing, cloud import, reporting, and admin ops
-- `run.sh`: macOS convenience launcher for local API + frontend
+**A private full-stack document operations system that ingests files, extracts expiration dates, surfaces upcoming risk, and supports scheduled alerts and audit workflows.**
 
-## Features
-- JWT auth with registration, email verification, login/logout, and admin role gating
-- Upload support for PDF, PNG, JPG, and JPEG
-- OCR and date extraction with persisted document/date records
-- Async background processing with job polling in the UI and sync fallback when needed
-- Expiring-soon reporting, CSV export, AI analysis, and audit logs
+[Architecture](docs/ARCHITECTURE.md) · [Local setup](#running-locally) · [Work with RelayWorks](https://getrelayworks.com/contact/)
+
+![Private](https://img.shields.io/badge/visibility-private-4B5563) ![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688) ![React](https://img.shields.io/badge/frontend-React-61DAFB)
+
+</div>
+
+> Keep this repository private. It is an implementation reference for confidential document workflows, not a public product or open-source release.
+
+## Business problem
+
+Licenses, certifications, policies, contracts, and identity documents often expire across disconnected folders and cloud drives. Manual spreadsheets miss dates, provide weak audit history, and do not prove whether a document was processed or an alert was sent. DocExpire centralizes ingestion, extraction, review, reporting, and alert operations.
+
+## Key features
+
+- JWT registration, verification, login/logout, and admin role gating
+- PDF and image upload with OCR and expiration-date extraction
+- Asynchronous processing jobs with UI polling and local eager fallback
+- Expiring-soon views, CSV export, optional AI analysis, and audit logs
 - Google Drive, Dropbox, and OneDrive OAuth connect/import flows
-- Admin operations panel for system status, alert runs, and SMTP test email
-- Local-first runtime profile: SQLite, filesystem storage, fakeredis, eager jobs
+- Scheduled email alerts and admin-triggered alert runs
+- Admin status view, readiness/liveness endpoints, and SMTP test path
+- Local profile using SQLite, filesystem storage, fakeredis, and eager jobs
+- Production profiles for PostgreSQL, Redis/RQ, and object storage
 
-## Prerequisites
-### Backend runtime
-- Python 3.11+
-- Tesseract OCR
-- Poppler (`pdftoppm`) for PDF image extraction
+## Screenshots
 
-### macOS
+No screenshots are committed. This repository handles potentially sensitive documents, so portfolio captures must use generated files and synthetic identities only. See [`docs/SCREENSHOTS.md`](docs/SCREENSHOTS.md) for the approved capture plan.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    U[Operator] --> R[React / Vite UI]
+    R --> F[FastAPI API]
+    F --> A[Auth and tenant controls]
+    F --> S[Storage adapter]
+    F --> Q[Redis / RQ jobs]
+    Q --> O[OCR and date extraction]
+    O --> D[(SQL database)]
+    C[Cloud drive providers] --> F
+    D --> L[Alert scheduler and email]
+```
+
+The local profile collapses external services into SQLite, filesystem storage, fakeredis, and eager execution. Production separates API, worker, scheduler, database, queue, and object storage. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Tech stack
+
+- FastAPI, Python 3.11+, SQLAlchemy, Alembic, Pydantic
+- React 18, Vite, React Router, Tailwind CSS
+- Tesseract OCR and Poppler/pdf2image
+- Redis Queue, APScheduler, PostgreSQL or SQLite
+- S3, Google Cloud Storage, Azure Blob, or local filesystem adapters
+- Google Drive, Dropbox, and Microsoft Graph integrations
+
+## Installation
+
+System prerequisites:
+
 ```bash
+# macOS
 brew install tesseract poppler
+
+# Ubuntu / Debian
+sudo apt-get update && sudo apt-get install -y tesseract-ocr poppler-utils
 ```
 
-### Ubuntu / Debian
-```bash
-sudo apt-get update
-sudo apt-get install -y tesseract-ocr poppler-utils
-```
+Install application dependencies:
 
-## Quick start: all-local mode
-This is the default developer profile. It does not require Postgres, S3, or Redis.
-
-### 1. Backend
 ```bash
-cd /Users/caleb/Desktop/DocExpire/backend
-python -m venv .venv
+git clone <private-repository-url>
+cd document-expiration-tracker-and-alert-system
+
+cd backend
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env
+
+cd ../frontend
+npm ci
+cp .env.example .env
+```
+
+## Configuration
+
+The checked-in examples are local-only templates. Replace both application/JWT secrets even for shared development. Production additionally requires a token-encryption key, SMTP, strict hosts/origins, real Redis with async jobs, a production database, and object storage.
+
+Cloud providers remain disabled until their OAuth client, secret, and exact callback URI are configured. Tokens are encrypted at rest; `TOKEN_ENCRYPTION_KEY` is mandatory outside development.
+
+## Running locally
+
+From the repository root:
+
+```bash
+cd backend
+source .venv/bin/activate
 alembic upgrade head
 uvicorn main:app --reload
 ```
 
-Local defaults after copying `backend/.env.example`:
-- SQLite database at `backend/docexpire.db`
-- Filesystem object storage at `backend/local_storage`
-- fakeredis queue backend with eager execution (`RQ_ASYNC=False`)
-- Manual verification links when SMTP is not configured
+In a second terminal:
 
-### 2. Frontend
 ```bash
-cd /Users/caleb/Desktop/DocExpire/frontend
-npm install
-cp .env.example .env
+cd frontend
 npm run dev
 ```
 
-The UI runs at [http://localhost:5173](http://localhost:5173) and points to [http://127.0.0.1:8000](http://127.0.0.1:8000) by default.
-
-### 3. Convenience launcher (macOS)
-```bash
-cd /Users/caleb/Desktop/DocExpire
-./run.sh
-```
-
-`run.sh` starts only the API and frontend because local mode uses eager background jobs. A separate worker is not required unless you enable `RQ_ASYNC=True`.
+Open `http://localhost:5173`. On macOS, `./run.sh` starts the API and frontend after dependencies and environment files exist. Local eager jobs do not require a worker.
 
 ## Background jobs and alerts
-### Worker
-Only required when `RQ_ASYNC=True`.
-```bash
-cd /Users/caleb/Desktop/DocExpire/backend
-source .venv/bin/activate
-python worker.py
-```
 
-### Scheduler
-Required when you want periodic alert enqueueing.
+When `RQ_ASYNC=True`, run these as separate processes from `backend/`:
+
 ```bash
-cd /Users/caleb/Desktop/DocExpire/backend
-source .venv/bin/activate
+python worker.py
 python scheduler.py
 ```
 
-## Tests and validation
-### Backend tests
+Do not start a worker against fakeredis/eager mode; that profile executes work inline.
+
+## Validation
+
 ```bash
-cd /Users/caleb/Desktop/DocExpire/backend
-source .venv/bin/activate
-pytest -q
+cd backend && source .venv/bin/activate && pytest -q
+cd ../frontend && npm test -- --run && npm run build
 ```
 
-### Frontend tests
-```bash
-cd /Users/caleb/Desktop/DocExpire/frontend
-npm test -- --run
+The last documented validation results and provider boundaries are in [`docs/VALIDATION.md`](docs/VALIDATION.md).
+
+## Deployment
+
+Production requires `APP_ENV=production`, unique encryption/auth secrets, HTTPS behind a reverse proxy, PostgreSQL, real Redis/RQ, durable object storage, restricted hosts/CORS, configured SMTP, and separate API/worker/scheduler processes. Run Alembic migrations before traffic and verify `/healthz`, `/readyz`, the SMTP test, one synthetic document, and one alert cycle.
+
+## Project structure
+
+```text
+backend/              FastAPI routes, auth, processing, storage, jobs, and tests
+  migrations/         Alembic migration environment and versions
+frontend/             React/Vite operations interface and tests
+docs/                 Architecture, validation, screenshots, troubleshooting
+run.sh                macOS local launcher
 ```
 
-### Frontend production build
-```bash
-cd /Users/caleb/Desktop/DocExpire/frontend
-npm run build
-```
+## Design decisions
 
-## Cloud OAuth setup
-Cloud import is disabled in the UI until backend credentials are configured.
+- Storage, queue, and database adapters support a low-friction local profile without pretending it is production infrastructure.
+- Async processing is the primary UI path; eager execution keeps local setup usable.
+- Cloud tokens are encrypted separately from application/JWT secrets.
+- SMTP-disabled development returns an honest manual verification path.
+- Operational endpoints distinguish liveness from dependency readiness.
 
-### Google Drive
-Set:
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REDIRECT_URI`
+## Known limitations
 
-Recommended local callback:
-- `http://127.0.0.1:8000/cloud/google_drive/callback`
+- Live cloud-provider handshakes require real vendor credentials and manual QA.
+- OCR and extracted dates require human review for poor scans and complex layouts.
+- AI analysis is optional and requires an Anthropic API key; core expiration tracking does not depend on it.
+- The repository does not claim regulatory compliance, legal recordkeeping, or guaranteed date accuracy.
+- Local SQLite/filesystem/fakeredis mode is not a production deployment profile.
 
-### Dropbox
-Set:
-- `DROPBOX_APP_KEY`
-- `DROPBOX_APP_SECRET`
-- `DROPBOX_REDIRECT_URI`
+## Roadmap
 
-Recommended local callback:
-- `http://127.0.0.1:8000/cloud/dropbox/callback`
+- Capture a fully synthetic upload-to-alert walkthrough for private sales demonstrations
+- Add representative OCR/date fixtures without using real documents
+- Exercise each cloud connector against dedicated test tenants
+- Add production load and recovery evidence before making scale claims
 
-### OneDrive
-Set:
-- `MICROSOFT_CLIENT_ID`
-- `MICROSOFT_CLIENT_SECRET`
-- `MICROSOFT_REDIRECT_URI`
-- `MICROSOFT_TENANT_ID` (usually `common`)
+## License
 
-Recommended local callback:
-- `http://127.0.0.1:8000/cloud/onedrive/callback`
+Private and proprietary. Copyright © 2026 Caleb Rogers. All rights reserved. See [`LICENSE`](LICENSE).
 
-Tokens are stored in the existing database and encrypted at rest. In staging and production you must set `TOKEN_ENCRYPTION_KEY`.
+## Work with me
 
-## SMTP behavior
-SMTP is optional in development and test.
-- If SMTP is configured, registration sends verification emails and the admin panel can send test mail.
-- If SMTP is not configured, local registration succeeds but returns a manual verification link instead of claiming email was sent.
-- In staging and production, registration is blocked until SMTP is configured.
-
-## Production requirements
-Production needs explicit infrastructure and secrets. At minimum set:
-- `APP_ENV=production`
-- `APP_SECRET_KEY`
-- `JWT_SECRET_KEY`
-- `TOKEN_ENCRYPTION_KEY`
-- `DATABASE_URL` to Postgres or another production-grade database
-- `REDIS_URL` to a real Redis instance
-- `RQ_ASYNC=True`
-- `STORAGE_PROVIDER` and corresponding object storage credentials
-- `ALLOWED_HOSTS`
-- `CORS_ALLOW_ORIGINS`
-- `SMTP_*` and `FROM_EMAIL`
-- `SECURE_HEADERS_HSTS_SECONDS` to a non-zero value behind HTTPS
-
-Recommended production processes:
-- API: `uvicorn` behind a reverse proxy or process manager
-- Worker: `python worker.py`
-- Scheduler: `python scheduler.py`
-- External services: managed Postgres, Redis, and object storage
-
-## Health and ops endpoints
-- `GET /healthz`: liveness
-- `GET /readyz`: readiness with DB and Redis dependency status
-- `GET /admin/status`: admin-only ops summary including queue mode and email/cloud config
-- `POST /admin/alerts/run`: admin-only manual alert enqueue
-- `POST /admin/test-email`: admin-only SMTP validation
-
-## Notes
-- The frontend now processes documents through the async queue endpoint first and polls job state until completion.
-- The delete route accepts nested storage keys, so keys like `uploads/<user>/<file>` are safe.
-- Filesystem storage and SQLite artifacts are ignored in `.gitignore` for local use.
-- See [SHIP_READINESS.md](/Users/caleb/Desktop/DocExpire/SHIP_READINESS.md) for the current validation summary.
+DocExpire demonstrates document ingestion, OCR, background jobs, cloud integrations, alerts, and internal operations tooling. For a custom document workflow, [contact RelayWorks](https://getrelayworks.com/contact/) or review [DevCalebR on GitHub](https://github.com/DevCalebR).

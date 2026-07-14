@@ -12,8 +12,8 @@ React + Vite frontend for DocExpire.
 
 ## Local setup
 ```bash
-cd /Users/caleb/Desktop/DocExpire/frontend
-npm install
+cd document-expiration-tracker-and-alert-system/frontend
+npm ci
 cp .env.example .env
 npm run dev
 ```
@@ -31,13 +31,11 @@ Use a different backend origin only if the API is not running on the default loc
 ## Quality checks
 ### Tests
 ```bash
-cd /Users/caleb/Desktop/DocExpire/frontend
 npm test -- --run
 ```
 
 ### Production build
 ```bash
-cd /Users/caleb/Desktop/DocExpire/frontend
 npm run build
 ```
 
@@ -45,3 +43,5 @@ npm run build
 - The UI uses background job processing first and only offers sync processing as an explicit fallback.
 - Cloud provider buttons stay disabled or show clear error states when backend credentials are missing.
 - The admin panel is visible only for users with the `admin` role.
+
+See the [root README](../README.md) for architecture, backend setup, production requirements, security, and project boundaries.
