@@ -70,39 +70,6 @@ class DocumentDate(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    
-    db = SessionLocal()
-    from auth import get_password_hash
-    
-    if settings.APP_DEBUG:
-        # Default admin user (dev only)
-        admin_exists = db.query(User).filter(User.username == "admin").first()
-        if not admin_exists:
-            admin = User(
-                username="admin",
-                email="removed@example.invalid",
-                full_name="Admin User",
-                hashed_password=get_password_hash("REMOVED_UNSAFE_DEFAULT"),
-                role="admin",
-                is_verified=True,
-            )
-            db.add(admin)
-        
-        # Default regular user (dev only)
-        user_exists = db.query(User).filter(User.username == "user").first()
-        if not user_exists:
-            user = User(
-                username="user",
-                email="removed@example.invalid",
-                full_name="Regular User",
-                hashed_password=get_password_hash("REMOVED_UNSAFE_DEFAULT"),
-                role="user",
-                is_verified=True,
-            )
-            db.add(user)
-    
-    db.commit()
-    db.close()
 
 def get_db():
     db = SessionLocal()
